@@ -5,7 +5,9 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace=apps/server\" \"npm run dev --workspace=apps/web\""
+    "dev": "concurrently \"npm run dev --workspace=apps/server\" \"npm run dev --workspace=apps/web\"",
+    "build": "npm run build --workspace=apps/server",
+    "start": "npm run start --workspace=apps/server"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
