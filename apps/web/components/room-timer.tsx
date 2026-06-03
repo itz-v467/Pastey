@@ -70,7 +70,9 @@ export default function RoomTimer() {
         }`}
       >
         <Clock className="w-4 h-4 md:w-5 md:h-5" />
-        <span className="font-mono">{formattedTime}</span>
+        <span className="font-mono tabular-nums text-center min-w-[60px] md:min-w-[70px]">
+          {formattedTime}
+        </span>
       </div>
     </div>
   );

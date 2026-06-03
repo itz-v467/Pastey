@@ -13,14 +13,14 @@ export default function RoomPage() {
   const router = useRouter();
   const token = params.token as string;
   const { connect, disconnect, isConnected, activeUsers, isExpired, error, destroyRoom } = useSocketStore();
-  
+
   const [showKillConfirm, setShowKillConfirm] = useState(false);
 
   useEffect(() => {
     if (token) {
       connect(token);
     }
-    
+
     return () => {
       disconnect();
     };
@@ -58,16 +58,20 @@ export default function RoomPage() {
               <span className="sm:hidden">{isConnected ? 'SYNC' : 'CONN'}</span>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-3 md:gap-5 ml-4">
              <div 
-               className="brutal-border brutal-shadow bg-primary px-3 md:px-4 py-1.5 font-mono font-bold text-black uppercase flex items-center text-sm md:text-lg shrink-0"
-               title="Click to select room code"
+               className="brutal-border bg-primary px-3 md:px-4 py-1.5 font-mono font-bold text-black uppercase flex items-center text-sm md:text-lg shrink-0 cursor-pointer select-none"
+               onClick={() => {
+                 navigator.clipboard.writeText(token);
+                 import('sonner').then((m) => m.toast.success('ROOM CODE COPIED'));
+               }}
+               title="Click to copy room code"
              >
-               ID: <span className="select-all ml-1 md:ml-2 cursor-text">{token}</span>
+               ID: <span className="ml-1 md:ml-2">{token}</span>
              </div>
             <RoomTimer />
-            <button 
+            <button
               onClick={() => setShowKillConfirm(true)}
               className="flex items-center justify-center select-none text-sm md:text-lg font-bold text-destructive-foreground brutal-border px-3 py-1.5 bg-destructive brutal-shadow hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all shrink-0"
               title="KILL ROOM"
