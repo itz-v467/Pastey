@@ -94,7 +94,7 @@ export default function RoomActions({ token }: { token: string }) {
         <div className="flex flex-wrap gap-2 p-4 border-b-[3px] border-black bg-muted/30">
           {files.map(f => (
             <div key={f.id} className="flex items-center gap-2 brutal-border bg-white px-3 py-1.5 shadow-[2px_2px_0px_0px_#000]">
-              <a href={f.data} download={f.name} className="text-sm font-bold max-w-[150px] md:max-w-[200px] truncate hover:underline">
+              <a href={`${process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000'}${f.url || ''}`} download={f.name} target="_blank" rel="noopener noreferrer" className="text-sm font-bold max-w-[150px] md:max-w-[200px] truncate hover:underline">
                 {f.name}
               </a>
               <button onClick={() => deleteFile(f.id)} className="text-destructive hover:bg-muted p-1">

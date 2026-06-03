@@ -1,10 +1,23 @@
 import { Redis } from 'ioredis';
 import dotenv from 'dotenv';
+import { fileStorage } from './fileStorage';
+
+dotenv.config();
 
 export const ROOM_TTL = 24 * 60 * 60; // 24 hours in seconds
 export const INACTIVITY_TTL = 60 * 60; // 1 hour in seconds
 
-export interface AttachedFile {
+// File metadata stored in Redis (no base64 data — that lives on disk)
+export interface FileMetadata {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  url: string; // served via /api/files/...
+}
+
+// Legacy format for backwards compat during migration
+export interface LegacyAttachedFile {
   id: string;
   name: string;
   type: string;
@@ -15,17 +28,18 @@ export interface AttachedFile {
 export interface RoomData {
   token: string;
   content: string;
-  files: AttachedFile[];
+  files: (FileMetadata | LegacyAttachedFile)[];
   createdAt: number;
   updatedAt: number;
   expiresAt: number;
   inactivityTtl: number; // in seconds
 }
 
-// In-Memory Fallback
+// In-Memory Fallback (development only)
 const memoryStore = new Map<string, any>();
 
-let redis: Redis | null = null;
+// --- Redis connection ---
+export let redis: Redis | null = null;
 
 if (process.env.REDIS_URL) {
   redis = new Redis(process.env.REDIS_URL, {
@@ -33,8 +47,12 @@ if (process.env.REDIS_URL) {
   });
   redis.on('error', (error) => console.error('Redis error:', error));
   redis.on('connect', () => console.log('Connected to Redis'));
+} else if (process.env.NODE_ENV === 'production') {
+  console.error('❌ FATAL: REDIS_URL is required in production. The in-memory store will lose all data on restart.');
+  console.error('   Set REDIS_URL environment variable and restart.');
+  process.exit(1);
 } else {
-  console.log('No REDIS_URL provided. Using in-memory store for development.');
+  console.log('⚠️  No REDIS_URL provided. Using in-memory store for development.');
 }
 
 async function setKey(key: string, value: string, ttlSeconds: number) {
@@ -98,6 +116,8 @@ export const roomService = {
   },
 
   async deleteRoom(token: string): Promise<void> {
+    // Clean up files on disk
+    fileStorage.deleteRoomFiles(token);
     await delKey(roomService.getRoomKey(token));
   },
 
@@ -114,6 +134,7 @@ export const roomService = {
     const newTtl = Math.min(timeUntilAbsoluteExpiry, roomData.inactivityTtl || INACTIVITY_TTL);
     
     if (newTtl <= 0) {
+      fileStorage.deleteRoomFiles(token);
       await delKey(key);
       return false;
     }
@@ -122,7 +143,7 @@ export const roomService = {
     return true;
   },
 
-  async addFile(token: string, file: AttachedFile): Promise<AttachedFile[] | null> {
+  async addFile(token: string, file: LegacyAttachedFile): Promise<FileMetadata[] | null> {
     const key = roomService.getRoomKey(token);
     const data = await getKey(key);
     if (!data) return null;
@@ -132,7 +153,17 @@ export const roomService = {
     
     if (roomData.files.length >= 3) return null; // Max 3 files limit
     
-    roomData.files.push(file);
+    // Save file data to disk, store only metadata in Redis
+    const url = fileStorage.saveFile(token, file.id, file.data);
+    const fileMetadata: FileMetadata = {
+      id: file.id,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      url,
+    };
+
+    roomData.files.push(fileMetadata);
     roomData.updatedAt = Date.now();
     
     const timeUntilAbsoluteExpiry = Math.max(0, Math.floor((roomData.expiresAt - Date.now()) / 1000));
@@ -141,10 +172,10 @@ export const roomService = {
       await setKey(key, JSON.stringify(roomData), newTtl);
     }
     
-    return roomData.files;
+    return roomData.files as FileMetadata[];
   },
 
-  async deleteFile(token: string, fileId: string): Promise<AttachedFile[] | null> {
+  async deleteFile(token: string, fileId: string): Promise<FileMetadata[] | null> {
     const key = roomService.getRoomKey(token);
     const data = await getKey(key);
     if (!data) return null;
@@ -152,6 +183,9 @@ export const roomService = {
     const roomData: RoomData = JSON.parse(data);
     if (!roomData.files) return [];
     
+    // Delete from disk
+    fileStorage.deleteFile(token, fileId);
+
     roomData.files = roomData.files.filter(f => f.id !== fileId);
     roomData.updatedAt = Date.now();
     
@@ -161,7 +195,7 @@ export const roomService = {
       await setKey(key, JSON.stringify(roomData), newTtl);
     }
     
-    return roomData.files;
+    return roomData.files as FileMetadata[];
   },
 
   async updateInactivityTtl(token: string, newInactivityTtl: number): Promise<boolean> {
@@ -177,6 +211,7 @@ export const roomService = {
     const newTtl = Math.min(timeUntilAbsoluteExpiry, roomData.inactivityTtl || INACTIVITY_TTL);
     
     if (newTtl <= 0) {
+      fileStorage.deleteRoomFiles(token);
       await delKey(key);
       return false;
     }

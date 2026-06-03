@@ -7,6 +7,8 @@ import dotenv from 'dotenv';
 import { roomRoutes } from './routes/rooms';
 import { setupRoomHandlers } from './sockets/roomHandler';
 import { apiRateLimiter } from './middleware/security';
+import { fileStorage } from './services/fileStorage';
+import { redis } from './services/redis';
 
 dotenv.config();
 
@@ -33,6 +35,12 @@ app.use('/api', apiRateLimiter);
 // API Routes
 app.use('/api/rooms', roomRoutes);
 
+// Serve uploaded files as static content
+app.use('/api/files', express.static(fileStorage.getUploadsDir(), {
+  maxAge: '1h',
+  immutable: true,
+}));
+
 // Health check
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
@@ -47,14 +55,41 @@ const io = new Server(httpServer, {
   maxHttpBufferSize: 3e6 // 3 MB max buffer to support 2MB file uploads + overhead
 });
 
+// Setup Redis adapter for horizontal scaling (if Redis is available)
+async function setupRedisAdapter() {
+  if (redis) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { createAdapter } = require('@socket.io/redis-adapter');
+      const pubClient = redis;
+      const subClient = pubClient.duplicate();
+      
+      subClient.on('error', (err: Error) => console.error('Redis sub client error:', err));
+      
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('✅ Socket.IO Redis adapter configured for multi-server scaling');
+    } catch (err: any) {
+      // @socket.io/redis-adapter is optional — works fine without it on single server
+      if (err.code === 'MODULE_NOT_FOUND') {
+        console.log('ℹ️  @socket.io/redis-adapter not installed. Running in single-server mode.');
+        console.log('   To enable multi-server scaling: npm install @socket.io/redis-adapter');
+      } else {
+        console.error('Failed to setup Redis adapter:', err);
+      }
+    }
+  }
+}
+
 // Initialize socket handlers
 setupRoomHandlers(io);
 
 const PORT = process.env.PORT || 4000;
 
 if (process.env.NODE_ENV !== 'test') {
-  httpServer.listen(PORT, () => {
-    console.log(`Pastey backend running on port ${PORT}`);
+  setupRedisAdapter().then(() => {
+    httpServer.listen(PORT, () => {
+      console.log(`Pastey backend running on port ${PORT}`);
+    });
   });
 }
 

@@ -124,3 +124,6 @@ dist
 
 # Markdown files (as requested)
 *.md
+
+# Uploaded files (stored on disk, not in git)
+uploads/

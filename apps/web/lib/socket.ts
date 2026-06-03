@@ -7,12 +7,17 @@ export const socket: Socket = io(SOCKET_URL, {
   autoConnect: false,
 });
 
+// Debounce timer for content updates
+let contentDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const DEBOUNCE_MS = 300;
+
 export interface AttachedFile {
   id: string;
   name: string;
   type: string;
   size: number;
-  data: string; // Base64
+  data?: string; // Base64 (legacy, used for upload)
+  url?: string;  // URL-based (new, served from disk)
 }
 
 interface SocketState {
@@ -54,6 +59,7 @@ export const useSocketStore = create<SocketState>((set) => ({
     socket.off('presence:update');
     socket.off('files:updated');
     socket.off('room:expired');
+    socket.off('ttl:updated');
     socket.off('error');
     socket.off('disconnect');
 
@@ -115,6 +121,10 @@ export const useSocketStore = create<SocketState>((set) => ({
         import('sonner').then((m) => m.toast.error('Maximum of 3 files allowed.'));
         return;
       }
+      if (err.message === 'RATE_LIMITED') {
+        // Silently ignore rate limit errors — the user doesn't need to know
+        return;
+      }
       set({ error: err.message });
     });
 
@@ -124,13 +134,26 @@ export const useSocketStore = create<SocketState>((set) => ({
   },
 
   disconnect: () => {
+    if (contentDebounceTimer) {
+      clearTimeout(contentDebounceTimer);
+      contentDebounceTimer = null;
+    }
     socket.disconnect();
     set({ isConnected: false, content: '', files: [], activeUsers: 0, isExpired: false, expiresAt: null, updatedAt: null, inactivityTtl: 3600, error: null });
   },
 
   updateContent: (newContent: string) => {
+    // Update local state immediately for responsive UI
     set({ content: newContent, updatedAt: Date.now() });
-    socket.emit('content:update', { content: newContent });
+    
+    // Debounce the actual socket emit
+    if (contentDebounceTimer) {
+      clearTimeout(contentDebounceTimer);
+    }
+    contentDebounceTimer = setTimeout(() => {
+      socket.emit('content:update', { content: newContent });
+      contentDebounceTimer = null;
+    }, DEBOUNCE_MS);
   },
 
   uploadFile: (file) => {
@@ -155,3 +178,4 @@ export const useSocketStore = create<SocketState>((set) => ({
     socket.disconnect();
   }
 }));
+

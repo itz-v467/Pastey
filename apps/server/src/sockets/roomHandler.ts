@@ -1,7 +1,21 @@
 import { Server, Socket } from 'socket.io';
 import { roomService } from '../services/redis';
+import { checkRateLimit, cleanupSocket, RATE_LIMITS } from '../middleware/socketRateLimiter';
 
 const MAX_CONTENT_SIZE = 100 * 1024; // 100 KB
+
+/**
+ * Helper: check rate limit for a socket event, emit error if exceeded.
+ * Returns true if allowed, false if blocked.
+ */
+function rateCheck(socket: Socket, eventName: keyof typeof RATE_LIMITS): boolean {
+  const rule = RATE_LIMITS[eventName];
+  if (!checkRateLimit(socket.id, eventName, rule)) {
+    socket.emit('error', { message: 'RATE_LIMITED' });
+    return false;
+  }
+  return true;
+}
 
 export function setupRoomHandlers(io: Server) {
   io.on('connection', (socket: Socket) => {
@@ -9,6 +23,8 @@ export function setupRoomHandlers(io: Server) {
 
     // Join a room
     socket.on('room:join', async ({ token }) => {
+      if (!rateCheck(socket, 'room:join')) return;
+
       // Basic validation
       const upperToken = typeof token === 'string' ? token.toUpperCase() : '';
       if (!upperToken || !/^([A-Z0-9]{6}|[A-Z0-9_-]{24,64})$/i.test(upperToken)) {
@@ -47,6 +63,8 @@ export function setupRoomHandlers(io: Server) {
 
     // Handle content updates
     socket.on('content:update', async ({ content }) => {
+      if (!rateCheck(socket, 'content:update')) return;
+
       const token = socket.data.room;
       if (!token) return;
 
@@ -69,6 +87,8 @@ export function setupRoomHandlers(io: Server) {
 
     // Handle file uploads
     socket.on('file:upload', async ({ file }) => {
+      if (!rateCheck(socket, 'file:upload')) return;
+
       const token = socket.data.room;
       if (!token || !file || !file.data) return;
 
@@ -87,6 +107,8 @@ export function setupRoomHandlers(io: Server) {
 
     // Handle file deletion
     socket.on('file:delete', async ({ fileId }) => {
+      if (!rateCheck(socket, 'file:delete')) return;
+
       const token = socket.data.room;
       if (!token || !fileId) return;
 
@@ -98,6 +120,8 @@ export function setupRoomHandlers(io: Server) {
 
     // Handle room destruction
     socket.on('room:destroy', async () => {
+      if (!rateCheck(socket, 'room:destroy')) return;
+
       const token = socket.data.room;
       if (!token) return;
 
@@ -107,6 +131,8 @@ export function setupRoomHandlers(io: Server) {
 
     // Handle TTL update
     socket.on('room:set_ttl', async ({ ttlHours }) => {
+      if (!rateCheck(socket, 'room:set_ttl')) return;
+
       const token = socket.data.room;
       if (!token) return;
       if (![1, 5, 15, 24].includes(ttlHours)) return;
@@ -134,6 +160,8 @@ export function setupRoomHandlers(io: Server) {
         await roomService.setPresence(token, clientsInRoom);
         io.to(token).emit('presence:update', { activeUsers: clientsInRoom });
       }
+      // Clean up rate limit buckets for this socket
+      cleanupSocket(socket.id);
       console.log(`Socket disconnected: ${socket.id}`);
     });
   });
