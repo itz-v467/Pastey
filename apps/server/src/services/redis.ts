@@ -48,9 +48,8 @@ if (process.env.REDIS_URL) {
   redis.on('error', (error) => console.error('Redis error:', error));
   redis.on('connect', () => console.log('Connected to Redis'));
 } else if (process.env.NODE_ENV === 'production') {
-  console.error('❌ FATAL: REDIS_URL is required in production. The in-memory store will lose all data on restart.');
-  console.error('   Set REDIS_URL environment variable and restart.');
-  process.exit(1);
+  console.warn('⚠️ WARNING: No REDIS_URL provided in production!');
+  console.warn('⚠️ Falling back to in-memory store. Data will be lost when the server restarts.');
 } else {
   console.log('⚠️  No REDIS_URL provided. Using in-memory store for development.');
 }

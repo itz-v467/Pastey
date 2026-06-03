@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: pastey-backend
+    env: node
+    rootDir: .
+    buildCommand: npm install && npm run build --workspace=apps/server
+    startCommand: npm start --workspace=apps/server
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
+      - key: FRONTEND_URL
+        value: https://pastey-web.vercel.app
