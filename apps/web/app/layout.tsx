@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
-import { Toaster } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 import Link from 'next/link';
 import { cn } from "@/lib/utils";
 

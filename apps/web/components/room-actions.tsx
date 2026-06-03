@@ -1,13 +1,15 @@
 'use client';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Copy, Share2, Trash2, Download, Paperclip, X } from 'lucide-react';
 import { useSocketStore } from '@/lib/socket';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { ConfirmModal } from '@/components/ui/confirm-modal';
 
 export default function RoomActions({ token }: { token: string }) {
   const { updateContent, content, uploadFile, files, deleteFile } = useSocketStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content);
@@ -45,10 +47,12 @@ export default function RoomActions({ token }: { token: string }) {
   };
 
   const handleClear = () => {
-    if (confirm('ARE YOU SURE YOU WANT TO CLEAR THE ROOM CONTENT?')) {
-      updateContent('');
-      toast.success('ROOM CLEARED');
-    }
+    setShowClearConfirm(true);
+  };
+  
+  const confirmClear = () => {
+    updateContent('');
+    toast.success('ROOM CLEARED');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,6 +131,16 @@ export default function RoomActions({ token }: { token: string }) {
           </Button>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        onConfirm={confirmClear}
+        title="CLEAR ROOM"
+        message="ARE YOU SURE YOU WANT TO CLEAR THE ROOM CONTENT?"
+        isDestructive={true}
+        confirmText="CLEAR TEXT"
+      />
     </div>
   );
 }

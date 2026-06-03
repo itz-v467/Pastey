@@ -19,6 +19,7 @@ export interface RoomData {
   createdAt: number;
   updatedAt: number;
   expiresAt: number;
+  inactivityTtl: number; // in seconds
 }
 
 // In-Memory Fallback
@@ -81,9 +82,10 @@ export const roomService = {
       createdAt: now,
       updatedAt: now,
       expiresAt,
+      inactivityTtl: INACTIVITY_TTL,
     };
 
-    await setKey(roomService.getRoomKey(token), JSON.stringify(roomData), ROOM_TTL);
+    await setKey(roomService.getRoomKey(token), JSON.stringify(roomData), INACTIVITY_TTL);
     return roomData;
   },
 
@@ -109,7 +111,7 @@ export const roomService = {
     roomData.updatedAt = Date.now();
 
     const timeUntilAbsoluteExpiry = Math.max(0, Math.floor((roomData.expiresAt - Date.now()) / 1000));
-    const newTtl = Math.min(timeUntilAbsoluteExpiry, INACTIVITY_TTL);
+    const newTtl = Math.min(timeUntilAbsoluteExpiry, roomData.inactivityTtl || INACTIVITY_TTL);
     
     if (newTtl <= 0) {
       await delKey(key);
@@ -134,7 +136,7 @@ export const roomService = {
     roomData.updatedAt = Date.now();
     
     const timeUntilAbsoluteExpiry = Math.max(0, Math.floor((roomData.expiresAt - Date.now()) / 1000));
-    const newTtl = Math.min(timeUntilAbsoluteExpiry, INACTIVITY_TTL);
+    const newTtl = Math.min(timeUntilAbsoluteExpiry, roomData.inactivityTtl || INACTIVITY_TTL);
     if (newTtl > 0) {
       await setKey(key, JSON.stringify(roomData), newTtl);
     }
@@ -154,12 +156,33 @@ export const roomService = {
     roomData.updatedAt = Date.now();
     
     const timeUntilAbsoluteExpiry = Math.max(0, Math.floor((roomData.expiresAt - Date.now()) / 1000));
-    const newTtl = Math.min(timeUntilAbsoluteExpiry, INACTIVITY_TTL);
+    const newTtl = Math.min(timeUntilAbsoluteExpiry, roomData.inactivityTtl || INACTIVITY_TTL);
     if (newTtl > 0) {
       await setKey(key, JSON.stringify(roomData), newTtl);
     }
     
     return roomData.files;
+  },
+
+  async updateInactivityTtl(token: string, newInactivityTtl: number): Promise<boolean> {
+    const key = roomService.getRoomKey(token);
+    const data = await getKey(key);
+    if (!data) return false;
+
+    const roomData: RoomData = JSON.parse(data);
+    roomData.inactivityTtl = newInactivityTtl;
+    roomData.updatedAt = Date.now();
+    
+    const timeUntilAbsoluteExpiry = Math.max(0, Math.floor((roomData.expiresAt - Date.now()) / 1000));
+    const newTtl = Math.min(timeUntilAbsoluteExpiry, roomData.inactivityTtl || INACTIVITY_TTL);
+    
+    if (newTtl <= 0) {
+      await delKey(key);
+      return false;
+    }
+    
+    await setKey(key, JSON.stringify(roomData), newTtl);
+    return true;
   },
 
   async getPresence(token: string): Promise<number> {

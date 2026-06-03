@@ -32,7 +32,14 @@ export function setupRoomHandlers(io: Server) {
       await roomService.setPresence(upperToken, clientsInRoom);
 
       // Tell user they joined and current state
-      socket.emit('room:joined', { content: room.content, files: room.files || [] });
+      socket.emit('room:joined', { 
+        content: room.content, 
+        files: room.files || [],
+        expiresAt: room.expiresAt,
+        updatedAt: room.updatedAt,
+        inactivityTtl: room.inactivityTtl,
+        serverNow: Date.now()
+      });
 
       // Broadcast presence to everyone in room
       io.to(upperToken).emit('presence:update', { activeUsers: clientsInRoom });
@@ -57,7 +64,7 @@ export function setupRoomHandlers(io: Server) {
       }
 
       // Broadcast to others in the room
-      socket.to(token).emit('content:updated', { content });
+      socket.to(token).emit('content:updated', { content, updatedAt: Date.now() });
     });
 
     // Handle file uploads
@@ -75,7 +82,7 @@ export function setupRoomHandlers(io: Server) {
         return socket.emit('error', { message: 'MAX_FILES_REACHED' });
       }
 
-      io.to(token).emit('files:updated', { files: updatedFiles });
+      io.to(token).emit('files:updated', { files: updatedFiles, updatedAt: Date.now() });
     });
 
     // Handle file deletion
@@ -85,7 +92,7 @@ export function setupRoomHandlers(io: Server) {
 
       const updatedFiles = await roomService.deleteFile(token, fileId);
       if (updatedFiles) {
-        io.to(token).emit('files:updated', { files: updatedFiles });
+        io.to(token).emit('files:updated', { files: updatedFiles, updatedAt: Date.now() });
       }
     });
 
@@ -96,6 +103,27 @@ export function setupRoomHandlers(io: Server) {
 
       await roomService.deleteRoom(token);
       io.to(token).emit('room:expired'); // This forces all clients to disconnect and redirect to /expired
+    });
+
+    // Handle TTL update
+    socket.on('room:set_ttl', async ({ ttlHours }) => {
+      const token = socket.data.room;
+      if (!token) return;
+      if (![1, 5, 15, 24].includes(ttlHours)) return;
+      
+      const ttlSeconds = ttlHours * 60 * 60;
+      const success = await roomService.updateInactivityTtl(token, ttlSeconds);
+      if (success) {
+        const room = await roomService.getRoom(token);
+        if (room) {
+           io.to(token).emit('ttl:updated', { 
+             expiresAt: room.expiresAt, 
+             updatedAt: room.updatedAt,
+             inactivityTtl: room.inactivityTtl,
+             serverNow: Date.now()
+           });
+        }
+      }
     });
 
     // Handle disconnect

@@ -21,6 +21,9 @@ interface SocketState {
   content: string;
   files: AttachedFile[];
   isExpired: boolean;
+  expiresAt: number | null;
+  updatedAt: number | null;
+  inactivityTtl: number; // in seconds
   error: string | null;
   connect: (token: string) => void;
   disconnect: () => void;
@@ -28,6 +31,8 @@ interface SocketState {
   uploadFile: (file: Omit<AttachedFile, 'id'>) => void;
   deleteFile: (fileId: string) => void;
   destroyRoom: () => void;
+  setTtl: (ttlHours: number) => void;
+  setExpired: () => void;
 }
 
 export const useSocketStore = create<SocketState>((set) => ({
@@ -36,6 +41,9 @@ export const useSocketStore = create<SocketState>((set) => ({
   content: '',
   files: [],
   isExpired: false,
+  expiresAt: null,
+  updatedAt: null,
+  inactivityTtl: 3600,
   error: null,
 
   connect: (token: string) => {
@@ -61,20 +69,37 @@ export const useSocketStore = create<SocketState>((set) => ({
       socket.connect();
     }
 
-    socket.on('room:joined', ({ content, files }) => {
-      set({ content, files: files || [], isExpired: false });
+    socket.on('room:joined', ({ content, files, expiresAt, updatedAt, inactivityTtl, serverNow }) => {
+      const skew = Date.now() - (serverNow || Date.now());
+      set({ 
+        content, 
+        files: files || [], 
+        isExpired: false, 
+        expiresAt: expiresAt ? expiresAt + skew : null, 
+        updatedAt: updatedAt ? updatedAt + skew : null, 
+        inactivityTtl: inactivityTtl || 3600 
+      });
     });
 
     socket.on('content:updated', ({ content }) => {
-      set({ content });
+      set({ content, updatedAt: Date.now() });
     });
 
     socket.on('files:updated', ({ files }) => {
-      set({ files });
+      set({ files, updatedAt: Date.now() });
     });
 
     socket.on('presence:update', ({ activeUsers }) => {
       set({ activeUsers });
+    });
+
+    socket.on('ttl:updated', ({ expiresAt, updatedAt, inactivityTtl, serverNow }) => {
+      const skew = Date.now() - (serverNow || Date.now());
+      set({ 
+        expiresAt: expiresAt ? expiresAt + skew : null, 
+        updatedAt: updatedAt ? updatedAt + skew : null, 
+        inactivityTtl 
+      });
     });
 
     socket.on('room:expired', () => {
@@ -100,11 +125,11 @@ export const useSocketStore = create<SocketState>((set) => ({
 
   disconnect: () => {
     socket.disconnect();
-    set({ isConnected: false, content: '', files: [], activeUsers: 0, isExpired: false, error: null });
+    set({ isConnected: false, content: '', files: [], activeUsers: 0, isExpired: false, expiresAt: null, updatedAt: null, inactivityTtl: 3600, error: null });
   },
 
   updateContent: (newContent: string) => {
-    set({ content: newContent });
+    set({ content: newContent, updatedAt: Date.now() });
     socket.emit('content:update', { content: newContent });
   },
 
@@ -119,5 +144,14 @@ export const useSocketStore = create<SocketState>((set) => ({
 
   destroyRoom: () => {
     socket.emit('room:destroy');
+  },
+
+  setTtl: (ttlHours: number) => {
+    socket.emit('room:set_ttl', { ttlHours });
+  },
+
+  setExpired: () => {
+    set({ isExpired: true });
+    socket.disconnect();
   }
 }));

@@ -15,8 +15,8 @@ export default function ExpiredPage() {
         This room is no longer available. Rooms automatically expire after 24 hours or after 1 hour of inactivity for security and privacy.
       </p>
       <Link href="/">
-        <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700">
-          Create New Room
+        <Button size="lg" className="bg-primary text-black hover:bg-white brutal-shadow">
+          RETURN TO HOME PAGE
         </Button>
       </Link>
     </div>

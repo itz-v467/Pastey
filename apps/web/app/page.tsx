@@ -56,7 +56,7 @@ export default function Home() {
         </p>
 
         <div className="flex flex-col gap-8 w-full max-w-sm mx-auto">
-          <Button size="lg" onClick={createRoom} disabled={isLoading} className="w-full text-xl h-14">
+          <Button size="lg" onClick={createRoom} disabled={isLoading} className="w-full text-xl h-14" suppressHydrationWarning>
             {isLoading ? 'INITIALIZING...' : 'CREATE ROOM'}
           </Button>
           
@@ -77,8 +77,9 @@ export default function Home() {
               onChange={(e) => setJoinLink(e.target.value.toUpperCase())}
               className="flex-1 text-center font-bold tracking-widest text-lg uppercase placeholder:text-muted-foreground/60 h-14"
               maxLength={6}
+              suppressHydrationWarning
             />
-            <Button type="submit" variant="outline" className="h-14 px-8 text-lg">
+            <Button type="submit" variant="outline" className="h-14 px-8 text-lg" suppressHydrationWarning>
               JOIN
             </Button>
           </form>
