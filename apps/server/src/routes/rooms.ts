@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import crypto from 'crypto';
 import { z } from 'zod';
 import { roomService } from '../services/redis';
 
@@ -14,8 +13,12 @@ const tokenSchema = z.string().regex(/^([A-Z0-9]{6}|[a-zA-Z0-9_-]{24,64})$/i, 'I
 
 // Generate 6-character alphanumeric Room ID
 function generateRoomId(): string {
-  // Use crypto for randomness, convert to hex, uppercase, and take first 6 characters
-  return crypto.randomBytes(4).toString('hex').toUpperCase().slice(0, 6);
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }
 
 // POST /api/rooms
