@@ -40,7 +40,7 @@ interface SocketState {
   setExpired: () => void;
 }
 
-export const useSocketStore = create<SocketState>((set) => ({
+export const useSocketStore = create<SocketState>((set, get) => ({
   isConnected: false,
   activeUsers: 0,
   content: '',
@@ -77,8 +77,21 @@ export const useSocketStore = create<SocketState>((set) => ({
 
     socket.on('room:joined', ({ content, files, expiresAt, updatedAt, inactivityTtl, serverNow }) => {
       const skew = Date.now() - (serverNow || Date.now());
+      
+      const localContent = get().content;
+      
+      let finalContent = content;
+      
+      // If server content is empty but local state has content (because user started typing 
+      // while backend was waking up), we shouldn't overwrite local state.
+      if (content === '' && localContent !== '') {
+        finalContent = localContent;
+        // Broadcast the local content to the server since server is empty
+        socket.emit('content:update', { content: localContent });
+      }
+
       set({ 
-        content, 
+        content: finalContent, 
         files: files || [], 
         isExpired: false, 
         expiresAt: expiresAt ? expiresAt + skew : null, 

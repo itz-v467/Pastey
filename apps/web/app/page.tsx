@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 
 export default function Home() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
   const [joinLink, setJoinLink] = useState('');
 
   // Wake up backend from sleep (cold start) as soon as page loads
@@ -15,22 +14,14 @@ export default function Home() {
     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/../health`).catch(() => {});
   }, []);
 
-  const createRoom = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/rooms`, {
-        method: 'POST',
-      });
-      
-      if (!res.ok) throw new Error('Failed to create room');
-      
-      const data = await res.json();
-      router.push(data.url);
-    } catch {
-      toast.error('Failed to create room. Please try again.');
-    } finally {
-      setIsLoading(false);
+  const createRoom = () => {
+    // Generate 6-character alphanumeric Room ID instantly on the client
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let token = '';
+    for (let i = 0; i < 6; i++) {
+      token += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+    router.push(`/r/${token}`);
   };
 
   const handleJoin = (e: React.FormEvent) => {
@@ -61,8 +52,8 @@ export default function Home() {
         </p>
 
         <div className="flex flex-col gap-8 w-full max-w-sm mx-auto">
-          <Button size="lg" onClick={createRoom} disabled={isLoading} className="w-full text-xl h-14" suppressHydrationWarning>
-            {isLoading ? 'INITIALIZING...' : 'CREATE ROOM'}
+          <Button size="lg" onClick={createRoom} className="w-full text-xl h-14" suppressHydrationWarning>
+            CREATE ROOM
           </Button>
           
           <div className="relative my-2">

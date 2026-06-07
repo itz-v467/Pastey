@@ -31,9 +31,10 @@ export function setupRoomHandlers(io: Server) {
         return socket.emit('error', { message: 'Invalid Room ID' });
       }
 
-      const room = await roomService.getRoom(upperToken);
+      let room = await roomService.getRoom(upperToken);
       if (!room) {
-        return socket.emit('room:expired');
+        // Auto-create room if it doesn't exist
+        room = await roomService.createRoom(upperToken);
       }
 
       // Join socket room

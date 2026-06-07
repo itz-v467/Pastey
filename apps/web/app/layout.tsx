@@ -29,8 +29,9 @@ export default function RootLayout({
         <main className="flex-1 flex flex-col">
           {children}
         </main>
-        <Toaster position="bottom-center" toastOptions={{
-          className: "brutal-border brutal-shadow font-sans text-foreground bg-white",
+        <Toaster position="top-center" toastOptions={{
+          className: "bg-transparent border-none shadow-none font-bold text-foreground text-lg",
+          style: { background: 'transparent', border: 'none', boxShadow: 'none' }
         }} />
       </body>
     </html>
